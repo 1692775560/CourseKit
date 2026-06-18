@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import {
   buildCsv,
   canExport,
@@ -37,57 +36,82 @@ const sampleCourses = [
   }
 ];
 
-describe("course filtering", () => {
-  it("returns all courses when status is all", () => {
-    assert.deepEqual(filterCourses(sampleCourses, "all"), sampleCourses);
-  });
+const tests = [
+  [
+    "returns all courses when status is all",
+    () => {
+      assert.deepEqual(filterCourses(sampleCourses, "all"), sampleCourses);
+    }
+  ],
+  [
+    "returns only courses matching the selected status",
+    () => {
+      assert.deepEqual(filterCourses(sampleCourses, "open"), [sampleCourses[0]]);
+      assert.deepEqual(filterCourses(sampleCourses, "full"), [sampleCourses[1]]);
+      assert.deepEqual(filterCourses(sampleCourses, "closed"), [sampleCourses[2]]);
+    }
+  ],
+  [
+    "reports the filtered count against the full list size",
+    () => {
+      assert.equal(getResultSummary(1, 3), "显示 1 / 3 门课程");
+    }
+  ],
+  [
+    "disables export when there are no filtered rows",
+    () => {
+      assert.equal(canExport([]), false);
+      assert.equal(canExport([sampleCourses[0]]), true);
+    }
+  ],
+  [
+    "escapes commas, quotes, and line breaks",
+    () => {
+      assert.equal(escapeCsvField("基础课"), "基础课");
+      assert.equal(escapeCsvField("AI, 产品"), '"AI, 产品"');
+      assert.equal(escapeCsvField('王"小川"'), '"王""小川"""');
+      assert.equal(escapeCsvField("第一行\n第二行"), '"第一行\n第二行"');
+    }
+  ],
+  [
+    "exports only the provided filtered rows",
+    () => {
+      const openCourses = filterCourses(sampleCourses, "open");
+      const csv = buildCsv(openCourses);
 
-  it("returns only courses matching the selected status", () => {
-    assert.deepEqual(filterCourses(sampleCourses, "open"), [sampleCourses[0]]);
-    assert.deepEqual(filterCourses(sampleCourses, "full"), [sampleCourses[1]]);
-    assert.deepEqual(filterCourses(sampleCourses, "closed"), [sampleCourses[2]]);
-  });
+      assert.match(csv, /课程名称,负责人,报名人数,容量,状态/);
+      assert.match(csv, /AI 产品课,林知远,8,20,招生中/);
+      assert.doesNotMatch(csv, /Prompt Lab/);
+      assert.doesNotMatch(csv, /增长实验设计/);
+    }
+  ],
+  [
+    "uses localized status labels in CSV output",
+    () => {
+      const csv = buildCsv(sampleCourses);
 
-  it("reports the filtered count against the full list size", () => {
-    assert.equal(getResultSummary(1, 3), "显示 1 / 3 门课程");
-  });
-});
+      assert.match(csv, /招生中/);
+      assert.match(csv, /已满/);
+      assert.match(csv, /已关闭/);
+      assert.equal(getStatusLabel("unknown"), "未知");
+    }
+  ],
+  [
+    "uses a stable date-based file name",
+    () => {
+      const date = new Date("2026-06-18T10:20:00+08:00");
+      assert.equal(getCsvFileName(date), "courses-2026-06-18.csv");
+    }
+  ]
+];
 
-describe("CSV export", () => {
-  it("disables export when there are no filtered rows", () => {
-    assert.equal(canExport([]), false);
-    assert.equal(canExport([sampleCourses[0]]), true);
-  });
+let passed = 0;
 
-  it("escapes commas, quotes, and line breaks", () => {
-    assert.equal(escapeCsvField("基础课"), "基础课");
-    assert.equal(escapeCsvField("AI, 产品"), '"AI, 产品"');
-    assert.equal(escapeCsvField('王"小川"'), '"王""小川"""');
-    assert.equal(escapeCsvField("第一行\n第二行"), '"第一行\n第二行"');
-  });
+for (const [name, run] of tests) {
+  run();
+  passed += 1;
+  console.log(`ok ${passed} - ${name}`);
+}
 
-  it("exports only the provided filtered rows", () => {
-    const openCourses = filterCourses(sampleCourses, "open");
-    const csv = buildCsv(openCourses);
-
-    assert.match(csv, /课程名称,负责人,报名人数,容量,状态/);
-    assert.match(csv, /AI 产品课,林知远,8,20,招生中/);
-    assert.doesNotMatch(csv, /Prompt Lab/);
-    assert.doesNotMatch(csv, /增长实验设计/);
-  });
-
-  it("uses localized status labels in CSV output", () => {
-    const csv = buildCsv(sampleCourses);
-
-    assert.match(csv, /招生中/);
-    assert.match(csv, /已满/);
-    assert.match(csv, /已关闭/);
-    assert.equal(getStatusLabel("unknown"), "未知");
-  });
-
-  it("uses a stable date-based file name", () => {
-    const date = new Date("2026-06-18T10:20:00+08:00");
-    assert.equal(getCsvFileName(date), "courses-2026-06-18.csv");
-  });
-});
+console.log(`\n${passed}/${tests.length} tests passed`);
 
